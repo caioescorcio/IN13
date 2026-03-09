@@ -1,0 +1,38 @@
+# OCaml build artifacts
+_build/
+*.cmo
+*.cmx
+*.cma
+*.cmxa
+*.a
+*.o
+*.so
+
+# OCaml compiled files
+*.cmi
+*.cmti
+*.annot
+
+# Dune build system
+_build/
+*.install
+dune-project
+
+# OPAM package manager
+*.opam.locked
+_opam/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Merlin
+.merlin
+*.exe
