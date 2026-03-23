@@ -36,3 +36,5 @@ Thumbs.db
 # Merlin
 .merlin
 *.exe
+*.native
+*.byte
