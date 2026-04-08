@@ -18,7 +18,7 @@ rule analyze = parse
     | "/*"      {general_comment lexbuf}
     | "+"       {PLUS}
     | "-"       {MINUS}
-    | "*"       {TIME}
+    | "*"       {TIMES}
     | "/"       {DIVIDE}
     | "("       {PARANTHESIS_LEFT}  
     | ")"       {PARANTHESIS_RIGHT}  

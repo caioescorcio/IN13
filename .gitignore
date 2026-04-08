@@ -22,6 +22,7 @@ dune-project
 *.opam.locked
 _opam/
 
+*._*
 # Editor files
 .vscode/
 .idea/
