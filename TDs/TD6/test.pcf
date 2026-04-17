@@ -1,0 +1,6 @@
+let f x = x in let a = f true in f false ;;
+let f x = x in let a = f true in f 1 ;;
+letrec fact n = if n <= 1 then 1 else n*fact(n-1) in fact 10 ;;
+letrec f x = f x in f ;;
+(fun f -> fun x -> if x then f 1 else f true) ;;
+let f x = fun y -> if true then x else y in f ;;

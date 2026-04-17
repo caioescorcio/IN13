@@ -1,0 +1,56 @@
+infer.cmo : \
+    pcfast.cmo
+infer.cmx : \
+    pcfast.cmx
+pcfast.cmo :
+pcfast.cmx :
+pcflex.cmo : \
+    pcfparse.cmi
+pcflex.cmx : \
+    pcfparse.cmx
+pcfloop.cmo : \
+    unify.cmi \
+    types.cmi \
+    pcfparse.cmi \
+    pcflex.cmo \
+    pcfast.cmo \
+    infer.cmo
+pcfloop.cmx : \
+    unify.cmx \
+    types.cmx \
+    pcfparse.cmx \
+    pcflex.cmx \
+    pcfast.cmx \
+    infer.cmx
+pcfparse.cmo : \
+    pcfast.cmo \
+    pcfparse.cmi
+pcfparse.cmx : \
+    pcfast.cmx \
+    pcfparse.cmi
+pcfparse.cmi : \
+    pcfast.cmo
+subst.cmo : \
+    types.cmi \
+    subst.cmi
+subst.cmx : \
+    types.cmx \
+    subst.cmi
+subst.cmi : \
+    types.cmi
+types.cmo : \
+    types.cmi
+types.cmx : \
+    types.cmi
+types.cmi :
+unify.cmo : \
+    types.cmi \
+    subst.cmi \
+    unify.cmi
+unify.cmx : \
+    types.cmx \
+    subst.cmx \
+    unify.cmi
+unify.cmi : \
+    types.cmi \
+    subst.cmi
