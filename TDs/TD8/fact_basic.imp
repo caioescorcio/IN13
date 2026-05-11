@@ -1,0 +1,14 @@
+main ()
+begin
+ var n ;
+ var res ;
+
+ n := 5 ;
+ res := 1 ;
+
+ while n > 0 do
+   res := res * n ;
+   n := n - 1 ;
+   done
+ print ("Et le résultat est... ", res, "\n") ;
+end

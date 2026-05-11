@@ -1,0 +1,27 @@
+CAMLC=$(BINDIR)ocamlc
+
+COMPFLAGS=-I `ocamlfind query unix`
+CAML_B_LFLAGS = `ocamlfind query -predicates byte -a-format unix`
+
+SOURCES = foo.ml
+OBJS = $(SOURCES:.ml=.cmo)
+EXEC = my-wonderful-program.x
+
+all: $(EXEC)
+
+$(EXEC): $(OBJS)
+	$(CAMLC) $(CAML_B_LFLAGS) $(COMPFLAGS) $(OBJS) -o $(EXEC)
+
+.SUFFIXES:
+.SUFFIXES: .ml .mli .cmo .cmi .cmx
+.SUFFIXES: .mll .mly
+
+.ml.cmo:
+	$(CAMLC) $(COMPFLAGS) -c $<
+
+.mli.cmi:
+	$(CAMLC) $(COMPFLAGS) -c $<
+
+clean:
+	rm -f *.cm[io] *.cmx *~ .*~ *.o *.x
+

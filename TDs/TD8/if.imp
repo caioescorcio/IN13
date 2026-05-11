@@ -1,0 +1,11 @@
+main ()
+begin
+var cinq ;
+cinq := 5 ;
+if cinq == 5 then
+  cinq := 7 ;
+else
+  cinq := 10 ;
+endif
+print (cinq, "\n") ;
+end

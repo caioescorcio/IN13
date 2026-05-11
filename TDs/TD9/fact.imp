@@ -1,0 +1,17 @@
+fact (n)
+begin
+ var res ;
+ res := 1 ;
+ while n > 0 do
+   res := res * n ;
+   n := n - 1 ;
+   done
+  return (res) ;
+end
+
+main ()
+begin
+ var cinq ;
+ cinq := 5 ;
+ print (fact (cinq), "\n") ;
+end

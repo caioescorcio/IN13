@@ -1,0 +1,70 @@
+MEMORY:
+
+    let mem = {
+    VmBytecode.size = 256 ;   (* Chaque tas fait initialement 256. *)
+    VmBytecode.next_free = 0 ;
+    VmBytecode.heap_base = 0 ; (* Sera 0 ou size pour dire dans quel tas on
+                                    alloue. *)
+    (* Comme on a 2 tas, on alloue le tableau de 2 fois la taille. *)
+    VmBytecode.data = Array.make (2 * 256) (VmBytecode.VMV_int 0)
+    } ;;
+
+
+
+
+gc (mem_state) :
+    find @ of TO :
+        start a copy index in @
+        (env' pile' reg') = copy_root (env pile reg)        >>>> the real GC code
+        update (FROM heap_base)
+        update (FROM next_free)
+        return (mem_state') = (env' pile' reg' code)
+
+
+
+
+copy_root (val) :
+    if val = int | bool | float : return val
+    if val = @ : 
+        q = transferer (val) 
+        return q
+    if val = env :
+        return transferer (v for v in env)
+
+
+
+
+
+transferer addr :
+    if mem[addr] = distant :
+        return addr
+    else :
+        t = mem[addr-1]                                     >>>> defined previously
+        addr' = copy to TO t values from mem[addr]
+        put addr' in mem[addr]
+
+        for p = pointer in mem[addr']
+            mem[addr' + p] <- transferer mem[addr' + p]
+
+        return addr'
+
+
+
+
+
+|0 ---------- size ---------- 2*size|
+
+distante addr = 
+    if heap_base = 0 && addr >= size = distante
+    if heap_base = size && addr < size = distante
+
+
+
+copy_block (from_addr size) :
+    mem[next_free] <- size
+    next_free++
+    from i = 0; i < size; i++ 
+        mem[next_free+i] <- mem[from_addr+i]
+    next_free += size 
+
+    return next_free - size
