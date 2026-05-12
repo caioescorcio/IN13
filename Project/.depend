@@ -1,0 +1,22 @@
+cshast.cmo :
+cshast.cmx :
+cshlex.cmo : \
+    cshparse.cmi
+cshlex.cmx : \
+    cshparse.cmx
+cshloop.cmo : \
+    cshparse.cmi \
+    cshlex.cmo \
+    cshast.cmo
+cshloop.cmx : \
+    cshparse.cmx \
+    cshlex.cmx \
+    cshast.cmx
+cshparse.cmo : \
+    cshast.cmo \
+    cshparse.cmi
+cshparse.cmx : \
+    cshast.cmx \
+    cshparse.cmi
+cshparse.cmi : \
+    cshast.cmo

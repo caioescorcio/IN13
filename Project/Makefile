@@ -1,16 +1,23 @@
 CAMLC=$(BINDIR)ocamlc
+CAMLDEP=$(BINDIR)ocamldep
+CAMLLEX=$(BINDIR)ocamllex
+CAMLYACC=$(BINDIR)ocamlyacc
+# COMPFLAGS=-w A-4-6-9 -warn-error A -g
+COMPFLAGS=
 
-COMPFLAGS=-I `ocamlfind query unix`
-CAML_B_LFLAGS = `ocamlfind query -predicates byte -a-format unix`
+EXEC = cshloop
 
-SOURCES = foo.ml
-OBJS = $(SOURCES:.ml=.cmo)
-EXEC = my-wonderful-program.x
+# Fichiers compilés, à produire pour fabriquer l'exécutable
+SOURCES = cshast.ml cshloop.ml
+GENERATED = cshlex.ml cshparse.ml cshparse.mli
+MLIS =
+OBJS = $(GENERATED:.ml=.cmo) $(SOURCES:.ml=.cmo)
 
+# Building the world
 all: $(EXEC)
 
 $(EXEC): $(OBJS)
-	$(CAMLC) $(CAML_B_LFLAGS) $(COMPFLAGS) $(OBJS) -o $(EXEC)
+	$(CAMLC) $(COMPFLAGS) $(OBJS) -o $(EXEC)
 
 .SUFFIXES:
 .SUFFIXES: .ml .mli .cmo .cmi .cmx
@@ -22,6 +29,22 @@ $(EXEC): $(OBJS)
 .mli.cmi:
 	$(CAMLC) $(COMPFLAGS) -c $<
 
+.mll.ml:
+	$(CAMLLEX) $<
+
+.mly.ml:
+	$(CAMLYACC) $<
+
+# Clean up
 clean:
-	rm -f *.cm[io] *.cmx *~ .*~ *.o *.x
+	rm -f *.cm[io] *.cmx *~ .*~ *.o
+	rm -f parser.mli
+	rm -f $(GENERATED)
+	rm -f $(EXEC)
+
+# Dependencies
+depend: $(SOURCES) $(GENERATED) $(MLIS)
+	$(CAMLDEP) $(SOURCES) $(GENERATED) $(MLIS) > .depend
+
+include .depend
 

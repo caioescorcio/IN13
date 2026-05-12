@@ -32,7 +32,6 @@ toplevel:
 ;
 
 var_decl:
-| VAR IDENT SEMICOLON { ($2, Scalar) }
 | VAR IDENT LBRACKET expr RBRACKET SEMICOLON { ($2, (Array $4)) }
 ;
 
