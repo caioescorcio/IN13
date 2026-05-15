@@ -5,15 +5,20 @@ type token =
   | FALSE
   | STRING of (string)
   | IDENT of (string)
+  | ATIDENT of (string)
+  | PATH of (string)
   | DEFINE
-  | FUNCTION
+  | FUN
   | VAR
+  | FOR
+  | WHILE
   | IF
-  | THEN
   | ELSE
+  | IN
   | PASS
   | COMMA
   | PIPE
+  | ANDAND
   | PLUS
   | MINUS
   | MULT
@@ -24,19 +29,13 @@ type token =
   | GREATEREQUAL
   | SMALLEREQUAL
   | SEMICOLON
+  | SEMISEMI
   | LPAR
   | RPAR
   | LBRACKET
   | RBRACKET
-  | FROM
-  | TO
   | LBRA
   | RBRA
-  | SEMISEMI
-  | FOR
-  | WHILE
-  | IN
-  | FUN
 
 val main :
   (Lexing.lexbuf  -> token) -> Lexing.lexbuf -> Cshast.expr

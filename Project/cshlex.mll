@@ -2,20 +2,13 @@
  open Cshparse ;;
   exception Eoi ;;
   exception LexError of (Lexing.position * Lexing.position) ;;
-  let line_number = ref 0 ;;
 
   let incr_line_number lexbuf =
-  let pos = lexbuf.Lexing.lex_curr_p in
-  lexbuf.Lexing.lex_curr_p <- { pos with
-    Lexing.pos_lnum = pos.Lexing.pos_lnum + 1 ;
-    Lexing.pos_bol = pos.Lexing.pos_cnum }
+    let pos = lexbuf.Lexing.lex_curr_p in
+    lexbuf.Lexing.lex_curr_p <- { pos with
+      Lexing.pos_lnum = pos.Lexing.pos_lnum + 1 ;
+      Lexing.pos_bol = pos.Lexing.pos_cnum }
   ;;
-
-  let pc c = Printf.eprintf "Lu '%c'\n%!" c;;
-  let ps c = Printf.eprintf "Lu '%s'\n%!" c;;
-
-  (* Emprunt� de l'analyseur lexical du compilateur OCaml *)
-  (* To buffer string literals *)
 
   let initial_string_buffer = Bytes.create 256;;
   let string_buff = ref initial_string_buffer;;
@@ -38,8 +31,6 @@
     let s = Bytes.to_string (Bytes.sub (!string_buff) 0 (!string_index)) in
     string_buff := initial_string_buffer;
     s;;
-
-  (* To translate escape sequences *)
 
   let char_for_backslash c = match c with
   | 'n' -> '\010'
@@ -68,39 +59,47 @@
                else d2 - 48
     in
     Char.chr (val1 * 16 + val2);;
-
 }
 
 let newline = ('\010' | '\013' | "\013\010")
+let ident_start = ['A'-'Z' 'a'-'z' '_']
+let ident_cont  = ['A'-'Z' 'a'-'z' '0'-'9' '_']
+let path_char   = ['a'-'z' 'A'-'Z' '0'-'9' '_' '-' '.' '/']
 
 rule lex = parse
     (' ' | '\t')
-      { lex lexbuf }     
+      { lex lexbuf }
   | newline
-      {         incr_line_number lexbuf ;
-        lex lexbuf }
+      { incr_line_number lexbuf ; lex lexbuf }
   | ['0'-'9']+ as lxm
       { INT(int_of_string lxm) }
-  | [ 'A'-'Z' 'a'-'z' ] [ 'A'-'Z' 'a'-'z' ]* as lxm
+  | ".." path_char* as lxm
+      { PATH(lxm) }
+  | "/" path_char* as lxm
+      { PATH(lxm) }
+  | "~" path_char* as lxm
+      { PATH(lxm) }
+  | '@' (ident_start ident_cont* as id)
+      { ATIDENT(id) }
+  | ident_start ident_cont* as lxm
       { match lxm with
-          "var" -> VAR
+          "var"      -> VAR
         | "function" -> FUN
-        | "for" -> FOR
-        | "define" -> DEFINE
-        | "in" -> IN
-        | "if" -> IF
-        | "pass" -> PASS 
-        | "else" -> ELSE
-        | "true" -> TRUE
-        | "false" -> FALSE
-        | "while" -> WHILE
-        | "from" -> FROM
-        | "to" -> TO
-        | _ -> IDENT(lxm) }
+        | "for"      -> FOR
+        | "define"   -> DEFINE
+        | "in"       -> IN
+        | "if"       -> IF
+        | "else"     -> ELSE
+        | "pass"     -> PASS
+        | "true"     -> TRUE
+        | "false"    -> FALSE
+        | "while"    -> WHILE
+        | _          -> IDENT(lxm) }
+  | "&&"  { ANDAND }
   | "="   { EQUAL }
-  | ">"   { GREATER} | "<"  { SMALLER }
-  | ">="  { GREATEREQUAL} | "<="  { SMALLEREQUAL }
-  | "+"   { PLUS } | "-"   { MINUS } | "*" { MULT } | "/" { DIV }
+  | ">"   { GREATER }  | "<"   { SMALLER }
+  | ">="  { GREATEREQUAL } | "<=" { SMALLEREQUAL }
+  | "+"   { PLUS } | "-"  { MINUS } | "*" { MULT } | "#" { DIV }
   | ";;"  { SEMISEMI }
   | ";"   { SEMICOLON }
   | '('   { LPAR }
@@ -114,14 +113,16 @@ rule lex = parse
   | '"'   { reset_string_buffer();
             in_string lexbuf;
             STRING (get_stored_string()) }
-  | "#>>"  { in_cpp_comment lexbuf }
+  | '\''  { reset_string_buffer();
+            in_single_string lexbuf;
+            STRING (get_stored_string()) }
+  | "#>>" { in_cpp_comment lexbuf }
   | "#>"  { in_c_comment lexbuf }
   | eof   { EOF }
-  | _  as c { Printf.eprintf "Invalid char `%c'\n%!" c ; lex lexbuf }
+  | _ as c { Printf.eprintf "Invalid char `%c'\n%!" c ; lex lexbuf }
 
 and in_string = parse
-    '"'
-      { () }
+    '"'  { () }
   | '\\' ['\\' '\'' '"' 'n' 't' 'b' 'r' ' ']
       { store_string_char(char_for_backslash(Lexing.lexeme_char lexbuf 1));
         in_string lexbuf }
@@ -130,19 +131,26 @@ and in_string = parse
         in_string lexbuf }
   | '\\' 'x' ['0'-'9' 'a'-'f' 'A'-'F'] ['0'-'9' 'a'-'f' 'A'-'F']
       { store_string_char(char_for_hexadecimal_code lexbuf 2);
-         in_string lexbuf }
+        in_string lexbuf }
   | '\\' _ as chars
       { skip_to_eol lexbuf; raise (Failure("Illegal escape: " ^ chars)) }
   | newline as s
       { for i = 0 to String.length s - 1 do
           store_string_char s.[i];
         done;
-        in_string lexbuf
-      }
-  | eof
-      { raise Eoi }
-  | _ as c
-      { store_string_char c; in_string lexbuf }
+        in_string lexbuf }
+  | eof  { raise Eoi }
+  | _ as c { store_string_char c; in_string lexbuf }
+
+and in_single_string = parse
+    '\''  { () }
+  | newline as s
+      { for i = 0 to String.length s - 1 do
+          store_string_char s.[i];
+        done;
+        in_single_string lexbuf }
+  | eof   { raise Eoi }
+  | _ as c { store_string_char c; in_single_string lexbuf }
 
 and in_cpp_comment = parse
     '\n' { lex lexbuf }
@@ -150,9 +158,9 @@ and in_cpp_comment = parse
   | eof  { raise Eoi }
 
 and in_c_comment = parse
-    "*/" { lex lexbuf }
-  | _    { in_c_comment lexbuf }
-  | eof  { raise Eoi }
+    "<<#" { lex lexbuf }
+  | _     { in_c_comment lexbuf }
+  | eof   { raise Eoi }
 
 and skip_to_eol = parse
     newline { () }
