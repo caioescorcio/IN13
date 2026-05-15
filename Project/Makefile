@@ -11,7 +11,7 @@ EXEC = cshloop
 SOURCES = cshast.ml cshloop.ml
 GENERATED = cshlex.ml cshparse.ml cshparse.mli
 MLIS =
-OBJS = $(GENERATED:.ml=.cmo) $(SOURCES:.ml=.cmo)
+OBJS = cshast.cmo cshparse.cmo cshlex.cmo cshloop.cmo
 
 # Building the world
 all: $(EXEC)
