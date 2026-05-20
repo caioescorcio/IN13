@@ -1,5 +1,9 @@
 cshast.cmo :
 cshast.cmx :
+cshinterp.cmo : \
+    cshast.cmo
+cshinterp.cmx : \
+    cshast.cmx
 cshlex.cmo : \
     cshparse.cmi
 cshlex.cmx : \
@@ -7,10 +11,12 @@ cshlex.cmx : \
 cshloop.cmo : \
     cshparse.cmi \
     cshlex.cmo \
+    cshinterp.cmo \
     cshast.cmo
 cshloop.cmx : \
     cshparse.cmx \
     cshlex.cmx \
+    cshinterp.cmx \
     cshast.cmx
 cshparse.cmo : \
     cshast.cmo \

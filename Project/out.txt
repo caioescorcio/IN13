@@ -1,0 +1,55 @@
+        Welcome to CaioSHell, version 0.01
+csh @ > === 1. Simple commands ===
+csh @ > Hello, CaioSHell!
+csh @ > /mnt/c/Users/caioe/Documents/Projetos/ENSTA/Mineur/IN13/Project
+csh @ > === 2. Variables ===
+csh @ > csh @ > Alice
+csh @ > csh @ > 42
+csh @ > === 3. Arithmetic ===
+csh @ > csh @ > csh @ > csh @ > csh @ > csh @ > csh @ > 13
+csh @ > 7
+csh @ > 30
+csh @ > 3
+csh @ > === 4. String concatenation ===
+csh @ > csh @ > csh @ > csh @ > Hello, World!
+csh @ > === 5. Functions ===
+csh @ > csh @ > Alice
+csh @ > Bob
+csh @ > === 6. Function with arithmetic ===
+csh @ > csh @ > 10
+csh @ > 42
+csh @ > === 7. Pipes ===
+csh @ > 2
+csh @ > tmp
+csh @ > === 8. And (&&) ===
+csh @ > first
+second
+csh @ > === 9. If / else ===
+csh @ > condition true
+csh @ > correctly false
+csh @ > === 10. For loop ===
+csh @ > alpha
+beta
+gamma
+csh @ > === 11. While loop ===
+csh @ > csh @ > 0
+1
+2
+csh @ > === 12. Variable reassignment ===
+csh @ > csh @ > csh @ > 101
+csh @ > === 13. Pass ===
+csh @ > csh @ > pass ok
+csh @ > === 14. File paths with dots ===
+csh @ > Caio
+csh @ > === 15. Command flags ===
+csh @ > total 20
+drwx------ 2 root root 4096 May 18 08:48 snap-private-tmp
+drwx------ 3 root root 4096 May 18 09:02 systemd-private-271a034780134b1c8b582f000d5193d1-polkit.service-jYhlwI
+drwx------ 3 root root 4096 May 18 08:48 systemd-private-271a034780134b1c8b582f000d5193d1-systemd-logind.service-fXU6SM
+drwx------ 3 root root 4096 May 18 08:48 systemd-private-271a034780134b1c8b582f000d5193d1-systemd-resolved.service-H8Ryy4
+drwx------ 3 root root 4096 May 18 08:48 systemd-private-271a034780134b1c8b582f000d5193d1-systemd-timesyncd.service-Xl1jjf
+csh @ > === 16. cd ===
+csh @ > csh @ > /tmp
+csh @ > csh @ > /
+csh @ > === All tests done ===
+csh @ > Bye bye.

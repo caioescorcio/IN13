@@ -2,29 +2,27 @@ CAMLC=$(BINDIR)ocamlc
 CAMLDEP=$(BINDIR)ocamldep
 CAMLLEX=$(BINDIR)ocamllex
 CAMLYACC=$(BINDIR)ocamlyacc
-# COMPFLAGS=-w A-4-6-9 -warn-error A -g
 COMPFLAGS=
 
 EXEC = cshloop
 
-# Fichiers compilés, à produire pour fabriquer l'exécutable
-SOURCES = cshast.ml cshloop.ml
+SOURCES = cshast.ml cshinterp.ml cshloop.ml
 GENERATED = cshlex.ml cshparse.ml cshparse.mli
 MLIS =
-OBJS = cshast.cmo cshparse.cmo cshlex.cmo cshloop.cmo
+OBJS = cshast.cmo cshparse.cmo cshlex.cmo cshinterp.cmo cshloop.cmo
 
 # Building the world
 all: $(EXEC)
 
 $(EXEC): $(OBJS)
-	$(CAMLC) $(COMPFLAGS) $(OBJS) -o $(EXEC)
+	$(CAMLC) $(COMPFLAGS) unix.cma $(OBJS) -o $(EXEC)
 
 .SUFFIXES:
 .SUFFIXES: .ml .mli .cmo .cmi .cmx
 .SUFFIXES: .mll .mly
 
 .ml.cmo:
-	$(CAMLC) $(COMPFLAGS) -c $<
+	$(CAMLC) $(COMPFLAGS) -I +unix -c $<
 
 .mli.cmi:
 	$(CAMLC) $(COMPFLAGS) -c $<
@@ -47,4 +45,3 @@ depend: $(SOURCES) $(GENERATED) $(MLIS)
 	$(CAMLDEP) $(SOURCES) $(GENERATED) $(MLIS) > .depend
 
 include .depend
-

@@ -61,10 +61,11 @@
     Char.chr (val1 * 16 + val2);;
 }
 
-let newline = ('\010' | '\013' | "\013\010")
+let newline    = ('\010' | '\013' | "\013\010")
 let ident_start = ['A'-'Z' 'a'-'z' '_']
 let ident_cont  = ['A'-'Z' 'a'-'z' '0'-'9' '_']
 let path_char   = ['a'-'z' 'A'-'Z' '0'-'9' '_' '-' '.' '/']
+let flag_char   = ['a'-'z' 'A'-'Z' '_' '-']
 
 rule lex = parse
     (' ' | '\t')
@@ -79,8 +80,12 @@ rule lex = parse
       { PATH(lxm) }
   | "~" path_char* as lxm
       { PATH(lxm) }
+  | '-' flag_char path_char* as lxm
+      { PATH(lxm) }
   | '@' (ident_start ident_cont* as id)
       { ATIDENT(id) }
+  | ident_start ident_cont* '.' path_char* as lxm
+      { PATH(lxm) }
   | ident_start ident_cont* as lxm
       { match lxm with
           "var"      -> VAR
@@ -118,7 +123,7 @@ rule lex = parse
             STRING (get_stored_string()) }
   | "#>>" { in_cpp_comment lexbuf }
   | "#>"  { in_c_comment lexbuf }
-  | eof   { EOF }
+  | eof   { raise Eoi }
   | _ as c { Printf.eprintf "Invalid char `%c'\n%!" c ; lex lexbuf }
 
 and in_string = parse

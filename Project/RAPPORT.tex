@@ -1,0 +1,723 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+
+\usepackage{amsmath,amssymb,amsthm}
+
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{booktabs}
+
+\usepackage{listings}
+\usepackage{xcolor}
+
+\definecolor{codebg}{rgb}{0.96,0.96,0.96}
+\definecolor{codeframe}{rgb}{0.8,0.8,0.8}
+
+\lstset{
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false
+}
+
+\newcommand{\sem}[4]{%
+  \langle #1,\;#2\rangle \rightarrow \langle #3,\;#4\rangle}
+\newcommand{\ext}[3]{#1\!\left[#2 \mapsto #3\right]}
+
+\newcommand{\irule}[2]{%
+  \dfrac{\displaystyle #1}{\displaystyle #2}
+}
+
+\newcommand{\dom}[1]{\mathrm{dom}(#1)}
+
+\newcommand{\truthy}{\mathrm{truthy}}
+
+\newcommand{\V}[1]{\mathtt{#1}}
+
+\newenvironment{bloc}[1]
+{
+  \par\medskip
+  \noindent\textbf{#1}
+  \par
+  \smallskip
+  \begin{quote}
+}
+{
+  \end{quote}
+  \medskip
+}
+
+\title{
+\textbf{Résumé Projet IN213}\\[0.5em]
+\large CaioSHell --- Interpréteur de shell en OCaml
+}
+
+\author{
+Caio ESCORCIO LIMA DOURADO\\
+ENSTA Paris
+}
+
+\date{25 Mai 2026}
+
+
+\begin{document}
+
+
+\maketitle
+\tableofcontents
+\clearpage
+\section{Vue d'ensemble}
+
+\textbf{Objectif :}
+concevoir un interpréteur d'un langage shell personnalisé
+(\texttt{.csh}), exécuté directement via les appels système Unix,
+sans compilation préalable.
+
+\subsection{Architecture}
+
+\begin{longtable}{|p{4cm}|p{9cm}|}
+\hline
+\textbf{Fichier} & \textbf{Rôle} \\
+\hline
+\texttt{cshlex.mll} & Analyse lexicale (tokens) \\
+\hline
+\texttt{cshparse.mly} & Analyse syntaxique (AST) \\
+\hline
+\texttt{cshast.ml} & Définition des nœuds AST \\
+\hline
+\texttt{cshinterp.ml} & Interpréteur / évaluateur \\
+\hline
+\texttt{cshloop.ml} & Boucle REPL interactive \\
+\hline
+\end{longtable}
+
+\subsection{Pipeline d'exécution}
+
+\begin{lstlisting}
+                                    source .csh
+                                        V
+                                    cshlex.mll
+                                        V
+                                      tokens
+                                        V
+                                    cshparse.mly
+                                        V
+                                       AST
+                                        V
+                                    cshinterp.ml
+                                        V
+                                    fork / execvp
+                                        V
+                                    resultat Unix
+\end{lstlisting}
+
+\begin{bloc}{Exemple}
+\begin{lstlisting}
+ls -la /tmp;;
+\end{lstlisting}
+
+\begin{itemize}
+  \item Lexer :
+\begin{lstlisting}
+IDENT PATH PATH SEMISEMI
+\end{lstlisting}
+
+  \item Parser :
+\begin{lstlisting}
+ECmd[
+  EIdent "ls";
+  EIdent "-la";
+  EIdent "/tmp"
+]
+\end{lstlisting}
+
+  \item Interpréteur :
+\begin{lstlisting}
+fork + execvp "ls"
+[|"ls"; "-la"; "/tmp"|]
+\end{lstlisting}
+\end{itemize}
+\end{bloc}
+
+\subsection{Typage}
+
+Le langage possède un \textbf{typage dynamique} :
+aucune vérification statique n'est effectuée avant l'exécution.
+
+Les erreurs de types apparaissent uniquement au moment
+où les valeurs sont réellement utilisées.
+
+
+\section{Valeurs et environnement}
+
+
+\subsection{Le type \texttt{value}}
+
+\begin{lstlisting}[language=ml]
+type value =
+  | VInt    of int
+  | VBool   of bool
+  | VString of string
+  | VUnit
+  | VClosure of (string list * Cshast.expr * env)
+\end{lstlisting}
+
+\begin{center}
+\begin{tabular}{|p{4cm}|p{8cm}|}
+\hline
+\textbf{Constructeur} & \textbf{Exemple} \\
+\hline
+\texttt{VInt 42} & \texttt{42}, \texttt{@x + 1} \\
+\hline
+\texttt{VBool true} & booléens, codes retour Unix \\
+\hline
+\texttt{VString "abc"} & chaînes, chemins, commandes \\
+\hline
+\texttt{VUnit} & absence de valeur significative \\
+\hline
+\texttt{VClosure} & fonction utilisateur \\
+\hline
+\end{tabular}
+\end{center}
+
+\begin{bloc}{Closures}
+Une \texttt{VClosure} capture :
+
+\begin{enumerate}
+  \item les paramètres,
+  \item le corps AST,
+  \item l'environnement $\sigma_f$ au moment de la définition.
+\end{enumerate}
+
+Cela implémente la \textbf{portée lexicale}.
+\end{bloc}
+
+\subsection{L'environnement $\sigma$}
+
+\begin{lstlisting}[language=ml]
+type env = (string * value) list
+\end{lstlisting}
+
+L'environnement est une liste d'association :
+
+\[
+\sigma =
+[
+("x", VInt\ 10);
+("name", VString\ "Alice")
+]
+\]
+
+\subsection{Extension de l'environnement}
+
+\begin{lstlisting}[language=ml]
+let bind x v env = (x,v) :: env
+\end{lstlisting}
+
+Notation sémantique :
+
+\[
+\ext{\sigma}{x}{v}
+\]
+
+\begin{bloc}{Masquage (shadowing)}
+\[
+\sigma =
+[(x,5)]
+\]
+
+\[
+\ext{\sigma}{x}{10}
+=
+[(x,10);(x,5)]
+\]
+
+La recherche retourne toujours la liaison la plus récente.
+\end{bloc}
+
+\section{Sémantique opérationnelle}
+
+\subsection{Jugement d'évaluation}
+
+\[
+\sem{e}{\sigma} {v}{\sigma'}
+\]
+
+Lecture :
+
+\begin{quote}
+« L'expression $e$, évaluée dans l'environnement $\sigma$,
+produit la valeur $v$ et le nouvel environnement $\sigma'$. »
+\end{quote}
+
+Correspondance directe avec OCaml :
+
+\begin{lstlisting}[language=ml]
+val eval :
+  Cshast.expr -> env -> value * env
+\end{lstlisting}
+
+\subsection{Règles d'inférence}
+
+Forme générale :
+
+\[
+\irule{\text{premisses}}{\text{conclusion}}
+\]
+
+Une règle sans prémisse est un axiome.
+
+\section{Règles d'évaluation}
+
+\subsection{Littéraux}
+
+\[
+\sem{\V{EInt}\;n}{\sigma}{\V{VInt}\;n}{\sigma}
+\]
+
+\[
+\sem{\V{EBool}\;b}{\sigma}{\V{VBool}\;b}{\sigma}
+\]
+
+\[
+\sem{\V{EString}\;s}{\sigma}{\V{VString}\;s}{\sigma}
+\]
+
+\[
+\sem{\V{EPass}}{\sigma}{\V{VUnit}}{\sigma}
+\]
+
+Les littéraux ne modifient jamais l'environnement.
+
+\subsection{\texttt{EIdent} et \texttt{EVar}}
+
+\textbf{Identifiant libre :}
+
+\[
+\irule{
+s \in \dom{\sigma}
+}{
+\sem{\V{EIdent}\;s}{\sigma}{\sigma(s)}{\sigma}
+}
+\]
+
+\[
+\irule{
+s \notin \dom{\sigma}
+}{
+\sem{\V{EIdent}\;s}{\sigma}{\V{VString}\;s}{\sigma}
+}
+\]
+
+\begin{bloc}{Interprétation}
+Si l'identifiant n'existe pas dans $\sigma$,
+il devient automatiquement une chaîne de caractères.
+
+Cela permet :
+
+\begin{lstlisting}
+ls /tmp
+\end{lstlisting}
+
+sans guillemets.
+\end{bloc}
+
+\textbf{Variable stricte :}
+
+\[
+\irule{
+s \in \dom{\sigma}
+}{
+\sem{\V{EVar}\;s}{\sigma}{\sigma(s)}{\sigma}
+}
+\]
+
+\[
+s \notin \dom{\sigma}
+\Rightarrow
+\texttt{Unbound variable}
+\]
+
+\subsection{\texttt{ESeq}}
+\[
+\irule{
+\sem{e_1}{\sigma}{v_1}{\sigma_1}
+\quad
+\cdots
+\quad
+\sem{e_n}{\sigma_{n-1}}{v_n}{\sigma_n}
+}{
+\sem{\V{ESeq}[e_1;\dots;e_n]}{\sigma}{v_n}{\sigma_n}
+}
+\]
+
+Implémentation :
+
+\begin{lstlisting}[language=ml]
+let rec fold_left f acc = function
+  | []      -> acc
+  | x :: xs -> fold_left f (f acc x) xs
+\end{lstlisting}
+
+\subsection{\texttt{EDefVar} et \texttt{EAssign}}
+
+\[
+\irule{
+\sem{e}{\sigma}{v}{\sigma'}
+}{
+\sem{\V{EDefVar}(x,e)}
+{\sigma}
+{\V{VUnit}}
+{\ext{\sigma'}{x}{v}}
+}
+\]
+
+\begin{bloc}{Observation}
+\texttt{EDefVar} et \texttt{EAssign}
+utilisent exactement la même règle sémantique :
+la différence est uniquement syntaxique.
+\end{bloc}
+
+\subsection{\texttt{EDefFun}}
+
+\[
+\sem{
+\V{EDefFun}(f,params,body)
+}{
+\sigma
+}{
+\V{VUnit}
+}{
+\ext{\sigma}{f}{
+\V{VClosure}(params,body,\sigma)
+}
+}
+\]
+
+\begin{bloc}{Portée lexicale}
+La fermeture capture l'environnement
+au moment de la définition.
+\end{bloc}
+
+\subsection{\texttt{EApp}}
+
+\[
+\irule{
+\sigma(f)=\V{VClosure}(ps,body,\sigma_f)
+\quad
+\forall i:\sem{a_i}{\sigma}{v_i}{\_}
+\quad
+\sem{body}{\sigma_c}{v}{\_}
+}{
+\sem{\V{EApp}(f,args)}{\sigma}{v}{\sigma}
+}
+\]
+
+\begin{lstlisting}[language=ml]
+ Cshast.EApp (f, args) ->
+      (match lookup f env with
+       | VClosure (params, body, closure_env) ->
+           let eval_arg a      = fst (eval a env) in
+           let bind_param acc p v = bind p v acc in
+           let vals    = map eval_arg args in
+           let call_env =
+             try fold_left2 bind_param closure_env params vals
+             with Invalid_argument _ ->
+               failwith (f ^ ": wrong number of arguments")
+           in
+           let (v, _) = eval body call_env in
+           (v, env)                          (* caller's env is unchanged *)
+       | _ -> failwith (f ^ " is not a function"))
+\end{lstlisting}
+
+\subsection{\texttt{EBinop}}
+
+\[
+\irule{
+\sem{e_1}{\sigma}{v_1}{\sigma_1}
+\quad
+\sem{e_2}{\sigma_1}{v_2}{\sigma_2}
+}{
+\sem{
+\V{EBinop}(op,e_1,e_2)
+}{
+\sigma
+}{
+op(v_1,v_2)
+}{
+\sigma_2
+}
+}
+\]
+
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+Opérateur & Types & Résultat \\
+\hline
+\texttt{+} & int $\times$ int & somme \\
+\texttt{+} & str $\times$ str & concaténation \\
+\texttt{-}, \texttt{*} & int $\times$ int & entier \\
+\texttt{\#} & int $\times$ int & division entière \\
+\texttt{=} & tout type & booléen \\
+\hline
+\end{tabular}
+\end{center}
+
+
+\section{Commandes Unix}
+
+\subsection{\texttt{eval\_cmd}}
+
+\begin{lstlisting}[language=ml]
+eval_cmd args env =
+  let arg_to_str a  = value_to_string (fst (eval a env)) in
+  let strs = map arg_to_str args in
+  match strs with
+  | [] -> failwith "empty command"
+\end{lstlisting}
+
+\subsection{Builtins}
+
+\begin{longtable}{|p{3cm}|p{9cm}|}
+\hline
+\textbf{Commande} & \textbf{Raison} \\
+\hline
+\texttt{cd} & doit modifier le shell courant \\
+\hline
+\texttt{exit} & termine l'interpréteur \\
+\hline
+\end{longtable}
+
+
+\subsection{fork + execvp}
+
+\begin{lstlisting}[language=ml]
+match Unix.fork () with
+| 0 ->
+    Unix.execvp cmd argv
+| pid ->
+    Unix.waitpid [] pid
+\end{lstlisting}
+
+\begin{bloc}{Convention Unix}
+Code retour $0$
+$\Rightarrow$
+succès
+$\Rightarrow$
+\texttt{VBool true}
+\end{bloc}
+
+
+\section{Pipes Unix}
+
+\[
+\irule{
+\sem{e_1}{\sigma}{\_}{\_}
+\quad
+\sem{e_2}{\sigma}{v}{\sigma'}
+}{
+\sem{\V{EPipe}(e_1,e_2)}{\sigma}{v}{\sigma'}
+}
+\]
+
+\begin{lstlisting}[language=ml]
+let (fd_in, fd_out) =
+  Unix.pipe ()
+\end{lstlisting}
+
+\begin{bloc}{Principe}
+\begin{itemize}
+  \item le processus gauche écrit dans \texttt{fd\_out}
+  \item le processus droit lit depuis \texttt{fd\_in}
+  \item \texttt{stdin} est restauré après le pipe
+\end{itemize}
+\end{bloc}
+
+
+\section{Résumé}
+
+\begin{center}
+\begin{tabular}{|l|c|c|}
+\hline
+Construction & Étend $\sigma$ & Visible appelant \\
+\hline
+\texttt{EDefVar} & oui & oui \\
+\texttt{EAssign} & oui & oui \\
+\texttt{EDefFun} & oui & oui \\
+\texttt{EApp} & local & non \\
+\texttt{ESeq} & propagation & oui \\
+\texttt{EWhile} & propagation & oui \\
+\texttt{EFor} & propagation & oui \\
+\texttt{ECmd} & non & non \\
+\texttt{EPipe} & non & non \\
+\hline
+\end{tabular}
+\end{center}
+
+\begin{bloc}{Conclusion}
+Le modèle :
+
+\[
+\sem{e}{\sigma}{v}{\sigma'}
+\]
+
+reflète directement la signature OCaml :
+
+\begin{lstlisting}[language=ml]
+eval :
+  expr -> env -> value * env
+\end{lstlisting}
+
+Le projet combine :
+
+\begin{itemize}
+  \item interprétation dynamique,
+  \item portée lexicale,
+  \item appels système Unix,
+  \item pipes et processus,
+  \item propagation fonctionnelle de l'environnement.
+\end{itemize}
+\end{bloc}
+
+\begin{bloc}{Example}
+
+L'example de code utilisé pour tester :
+
+\begin{lstlisting}[language=ml]
+    
+#>> CaioSHell - Tests
+
+
+#>> Simple commands
+echo " 1. Simple commands ";;
+echo "Hello, CaioSHell!";;
+pwd;;
+
+#>> Variables
+echo " Variables ";;
+define var name = "Alice";;
+echo @name;;
+define var n = 42;;
+echo @n;;
+
+#>> Arithmetic
+echo " Arithmetic ";;
+define var a = 10;;
+define var b = 3;;
+define var sum  = @a + @b;;
+define var diff = @a - @b;;
+define var prod = @a * @b;;
+define var quot = @a # @b;;
+echo @sum;;
+echo @diff;;
+echo @prod;;
+echo @quot;;
+
+#>> String concatenation
+echo " String concatenation ";;
+define var s1 = "Hello, ";;
+define var s2 = "World!";;
+define var msg = @s1 + @s2;;
+echo @msg;;
+
+#>> Function definition and call
+echo " Functions ";;
+define function greet(person) {
+    echo @person;
+};;
+greet("Alice");;
+greet("Bob");;
+
+#>> Function with arithmetic
+echo " 6. Function with arithmetic ";;
+define function double(x) {
+    define var result = @x * 2;
+    echo @result;
+};;
+double(5);;
+double(21);;
+
+#>> Pipes
+echo " Pipes ";;
+echo "hello world" | wc -w;;
+ls / | grep tmp;;
+
+#>> And (&&)
+echo " And (&&) ";;
+(echo "first") && (echo "second");;
+
+#>>If / else
+echo "If / else ";;
+if (test 1 "-eq" 1) {
+    echo "condition true";
+} else {
+    echo "condition false";
+};;
+if (test 1 "-eq" 2) {
+    echo "should not print";
+} else {
+    echo "correctly false";
+};;
+
+#>> For loop
+echo " For loop ";;
+for (@item in ["alpha", "beta", "gamma"]) {
+    echo @item;
+};;
+
+#>> While loop
+echo " While loop ";;
+define var i = 0;;
+while (test @i "-lt" 3) {
+    echo @i;
+    i = @i + 1;
+};;
+
+#>> Variable reassignment
+echo " Variable reassignment ";;
+define var counter = 100;;
+counter = @counter + 1;;
+echo @counter;;
+
+#>> Pass
+echo " Pass ";;
+if (test 0 "-eq" 1) {
+    echo "unreachable";
+} else {
+    pass;
+};;
+echo "pass ok";;
+
+#>>Files with dots in name
+echo "File paths with dots ";;
+cat /etc/hostname;;
+
+#>> Flags (dash args)
+echo " Command flags ";;
+ls -l /tmp;;
+
+#>> cd
+echo "cd ";;
+cd /tmp;;
+pwd;;
+cd /;;
+pwd;;
+
+echo " All tests done ";;
+
+\end{lstlisting}
+
+\end{bloc}
+
+\end{document}
