@@ -82,9 +82,9 @@ for (@item in ["alpha", "beta", "gamma"]) {
 #>> While loop
 echo " While loop ";;
 define var i = 0;;
-while (test @i "-lt" 3) {
+while (test @i "-gt" -3) {
     echo @i;
-    i = @i + 1;
+    i = @i - 1;
 };;
 
 #>> Variable reassignment

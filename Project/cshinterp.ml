@@ -7,6 +7,9 @@ type value =
 
 and env = (string * value) list
 
+(* a little remark is that a good amount of the following functions are naturally in the List lib of OCaml. I chose to not use them as imports 
+ to make the code more understandable *)
+
 (*linear search through the association list. Returns the first (most recent) binding for key. *)
 let rec assoc key = function
   | []                        -> raise Not_found
@@ -29,7 +32,7 @@ let rec fold_left f acc = function
   | []      -> acc
   | x :: xs -> fold_left f (f acc x) xs
 
-(*same as fold_left but consumes two lists in lockstep. Used by EApp to bind each parameter name to its argument value. *)
+(*same as fold_left but consumes two lists in lockstep. Used by EApp to bind each parameter name to its argument value for each occurence. *)
 let rec fold_left2 f acc l1 l2 =
   match l1, l2 with
   | [],      []       -> acc
@@ -111,10 +114,8 @@ let rec eval e env =
       (VUnit, bind f (VClosure (params, body, env)) env)
 
   (*  Function call 
-     1. Look up f to get its closure (params, body, closure_env).
-     2. Evaluate each argument in the caller's env.
-     3. Bind params -> values in closure_env (not caller's env).
-     4. Evaluate body in that call_env; discard any env changes (local scope). *)
+     looks up f to get its closure (params, body, closure_env). After this it evaluates each argument in the caller's env.
+     then binds the params -> values in closure_env (not caller's env) and finally body in that call_env; discard any env changes (local scope). *)
   | Cshast.EApp (f, args) ->
       (match lookup f env with
        | VClosure (params, body, closure_env) ->
@@ -156,7 +157,7 @@ let rec eval e env =
       if is_truth vc then eval t env1 else eval f env1
 
   (* while env_ref carries sigma across iterations so that assignments inside
-     the body (e.g. i = @i + 1) are visible in the next condition check. *)
+     the body (ex: i = @i + 1) are visible in the next condition check. *)
   | Cshast.EWhile (cond, body) ->
       let env_ref = ref env in
       while is_truth (fst (eval cond !env_ref)) do
@@ -221,15 +222,17 @@ and eval_binop op e1 e2 env =
   in
   (result, env2)
 
-(* With foo.ml > each argument expression is evaluated and converted to a string. cd and exit are built-ins that must run in the shell process itself. *)
-   (*everything else uses fork + execvp so the shell stays alive. *)
+(* Evaluates a shell command. Each argument expression is converted to a string
+   first. cd and exit are built-ins that run in the shell process itself;
+   everything else is executed via fork + execvp (see foo.ml : exec_command). *)
 and eval_cmd args env =
-  let arg_to_str a  = value_to_string (fst (eval a env)) in
+  let arg_to_str a = value_to_string (fst (eval a env)) in
   let strs = map arg_to_str args in
   match strs with
   | [] -> failwith "empty command"
 
-  (* cd must be a built-in: chdir in a child process would not change the shell's own working directory. *)
+  (* cd must be a built-in: Unix.chdir in a child process only changes that
+     child's directory, not the shell's own working directory. *)
   | "cd" :: rest ->
       let dir = match rest with
         | []  -> (try Sys.getenv "HOME" with Not_found -> "/")
@@ -241,7 +244,7 @@ and eval_cmd args env =
          Printf.eprintf "cd: %s: %s\n%!" dir (Unix.error_message e);
          (VBool false, env))
 
-  (* exit must be a built-in: it terminates the interpreter process. *)
+  (* exit must be a built-in: it terminates the interpreter process itself. *)
   | "exit" :: rest ->
       let code = match rest with
         | []  -> 0
@@ -250,30 +253,44 @@ and eval_cmd args env =
       in
       exit code
 
-  (* external command: fork, then exec in the child. Parent waits and converts the exit code to VBool. *)
+  (* External command: create a new child process via fork.
+     The child replaces its image with the command (execvp).
+     The first element of argv must be the command name itself. *)
   | cmd :: rest ->
       (match Unix.fork () with
        | 0 ->
+           (* child: replace this process image with the command to run. *)
            (try Unix.execvp cmd (to_array (cmd :: rest))
             with Unix.Unix_error (e, _, _) ->
               Printf.eprintf "%s: %s\n%!" cmd (Unix.error_message e);
               exit 127)
-       | pid ->
-           (match Unix.waitpid [] pid with
-            | (_, Unix.WEXITED 0)   -> (VBool true,  env)
-            | (_, Unix.WEXITED _)   -> (VBool false, env)
-            | (_, Unix.WSIGNALED _) -> (VBool false, env)
-            | (_, Unix.WSTOPPED _)  -> (VBool false, env)))
+       | child_pid ->
+           (* parent : wait explicitly for this specific child to finish.
+              WUNTRACED also catches stopped processes (Ctrl+Z). *)
+           (match Unix.waitpid [Unix.WUNTRACED] child_pid with
+            | (_, Unix.WEXITED 0) ->
+                (VBool true, env)
+            | (_, Unix.WEXITED _) ->
+                (* Non-zero exit is normal shell "false" (e.g. test returning 1). *)
+                (VBool false, env)
+            | (dead_pid, Unix.WSIGNALED signal) ->
+                Printf.eprintf "process %d interrupted by signal %d\n%!" dead_pid signal;
+                (VBool false, env)
+            | (aslept_pid, Unix.WSTOPPED signal) ->
+                Printf.eprintf "process %d stopped by signal %d\n%!" aslept_pid signal;
+                (VBool false, env)))
 
-(* Still with foo.ml *)
-(* a child process evaluates e1 with stdout redirected to the write end. the parent evaluates e2 with stdin redirected to the read end.
-   stdin is saved and restored afterwards so the REPL keeps working. *)
+(* Implements e1 | e2 using a Unix pipe (see foo.ml : pipe_commands).
+   A child process evaluates e1 with its stdout wired to the write end.
+   The parent evaluates e2 with its stdin wired to the read end.
+   stdin is saved and restored so the REPL keeps reading from the keyboard. *)
 and eval_pipe e1 e2 env =
   let (fd_in, fd_out) = Unix.pipe () in
   let saved_stdin = Unix.dup Unix.stdin in
   match Unix.fork () with
   | 0 ->
-      (* child: write side — redirect stdout to pipe, then run e1. *)
+      (* left side: redirect stdout to the write end of the pipe, then evaluate e1. 
+      The read end is unused here and must be closed so the parent's read does not block forever. *)
       Unix.dup2 fd_out Unix.stdout;
       Unix.close fd_out;
       Unix.close fd_in;
@@ -281,13 +298,12 @@ and eval_pipe e1 e2 env =
       ignore (eval e1 env);
       exit 0
   | left_pid ->
-      (* parent: read side — redirect stdin from pipe, then run e2. *)
+      (* right side: connect the read end of the pipe to stdin, then evaluate e2 which will read what the child wrote. *)
       Unix.dup2 fd_in Unix.stdin;
       Unix.close fd_out;
       Unix.close fd_in;
       let result = eval e2 env in
-      ignore (Unix.waitpid [] left_pid);
-      (* restore stdin so the REPL can read keyboard input again. *)
+      ignore (Unix.waitpid [Unix.WUNTRACED] left_pid);
       Unix.dup2 saved_stdin Unix.stdin;
       Unix.close saved_stdin;
       result

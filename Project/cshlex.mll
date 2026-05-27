@@ -82,6 +82,8 @@ rule lex = parse
       { PATH(lxm) }
   | '-' flag_char path_char* as lxm
       { PATH(lxm) }
+  | '-' ['0'-'9']+ as lxm
+      { PATH(lxm) }
   | '@' (ident_start ident_cont* as id)
       { ATIDENT(id) }
   | ident_start ident_cont* '.' path_char* as lxm
