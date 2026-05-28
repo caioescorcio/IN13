@@ -76,7 +76,10 @@ ENSTA Paris
 \maketitle
 \tableofcontents
 \clearpage
+
+% ============================================================
 \section{Vue d'ensemble}
+% ============================================================
 
 \textbf{Objectif :}
 concevoir un interpréteur d'un langage shell personnalisé
@@ -99,26 +102,28 @@ sans compilation préalable.
 \hline
 \texttt{cshloop.ml} & Boucle REPL interactive \\
 \hline
+\texttt{test.csh} & Exemples de la syntaxe du code \\
+\hline
 \end{longtable}
 
 \subsection{Pipeline d'exécution}
 
 \begin{lstlisting}
-                                    source .csh
-                                        V
-                                    cshlex.mll
-                                        V
-                                      tokens
-                                        V
-                                    cshparse.mly
-                                        V
-                                       AST
-                                        V
-                                    cshinterp.ml
-                                        V
-                                    fork / execvp
-                                        V
-                                    resultat Unix
+                                source .csh
+                                    V
+                                cshlex.mll
+                                    V
+                                  tokens
+                                    V
+                                cshparse.mly
+                                    V
+                                   AST
+                                    V
+                                cshinterp.ml
+                                    V
+                                fork / execvp
+                                    V
+                                resultat Unix
 \end{lstlisting}
 
 \begin{bloc}{Exemple}
@@ -149,6 +154,33 @@ fork + execvp "ls"
 \end{itemize}
 \end{bloc}
 
+% ------------------------------------------------------------
+\subsection{Inspiration générale}
+% ------------------------------------------------------------
+
+L'implémentation de \texttt{cshinterp.ml} s'appuie sur deux sources
+d'inspiration principales.
+
+\medskip
+\textbf{\texttt{foo.ml} --- modèle pour les appels système Unix.}
+Le fichier \texttt{foo.ml} fourni dans le cours définit deux fonctions,
+\texttt{exec\_command} et \texttt{pipe\_commands}, qui illustrent
+l'utilisation de \texttt{Unix.fork}, \texttt{Unix.execvp},
+\texttt{Unix.pipe} et \texttt{Unix.waitpid}.
+Les fonctions \texttt{eval\_cmd} et \texttt{eval\_pipe} reprennent
+directement cette structure : séparation fils/père, nommage des PIDs
+(\texttt{child\_pid}, \texttt{dead\_pid}), flag \texttt{Unix.WUNTRACED}
+et gestion des codes retour.
+
+\medskip
+\textbf{Module \texttt{List} d'OCaml --- fonctions réimplémentées.}
+L'interpréteur \emph{n'importe pas} le module \texttt{List}.
+Les fonctions nécessaires (\texttt{map}, \texttt{fold\_left},
+\texttt{fold\_left2}, \texttt{iter}, \texttt{assoc}, \texttt{assoc\_opt})
+sont réécrites à la main, ce qui rend leur rôle explicite dans le
+contexte de l'interpréteur. De même, \texttt{to\_array} remplace
+\texttt{Array.of\_list} sans faire appel à la bibliothèque standard.
+
 \subsection{Typage}
 
 Le langage possède un \textbf{typage dynamique} :
@@ -158,8 +190,9 @@ Les erreurs de types apparaissent uniquement au moment
 où les valeurs sont réellement utilisées.
 
 
+% ============================================================
 \section{Valeurs et environnement}
-
+% ============================================================
 
 \subsection{Le type \texttt{value}}
 
@@ -213,8 +246,8 @@ L'environnement est une liste d'association :
 \[
 \sigma =
 [
-("x", VInt\ 10);
-("name", VString\ "Alice")
+("x", \V{VInt}\ 10);
+("name", \V{VString}\ "Alice")
 ]
 \]
 
@@ -232,25 +265,23 @@ Notation sémantique :
 
 \begin{bloc}{Masquage (shadowing)}
 \[
-\sigma =
-[(x,5)]
-\]
-
-\[
-\ext{\sigma}{x}{10}
-=
-[(x,10);(x,5)]
+\sigma = [(x,5)]
+\qquad
+\ext{\sigma}{x}{10} = [(x,10);(x,5)]
 \]
 
 La recherche retourne toujours la liaison la plus récente.
+Un ancien lien n'est jamais supprimé --- il est simplement masqué.
 \end{bloc}
 
+% ============================================================
 \section{Sémantique opérationnelle}
+% ============================================================
 
 \subsection{Jugement d'évaluation}
 
 \[
-\sem{e}{\sigma} {v}{\sigma'}
+\sem{e}{\sigma}{v}{\sigma'}
 \]
 
 Lecture :
@@ -272,36 +303,35 @@ val eval :
 Forme générale :
 
 \[
-\irule{\text{premisses}}{\text{conclusion}}
+\irule{\text{prémisses}}{\text{conclusion}}
 \]
 
 Une règle sans prémisse est un axiome.
 
+% ============================================================
 \section{Règles d'évaluation}
+% ============================================================
 
 \subsection{Littéraux}
 
 \[
 \sem{\V{EInt}\;n}{\sigma}{\V{VInt}\;n}{\sigma}
-\]
-
-\[
+\qquad
 \sem{\V{EBool}\;b}{\sigma}{\V{VBool}\;b}{\sigma}
 \]
 
 \[
 \sem{\V{EString}\;s}{\sigma}{\V{VString}\;s}{\sigma}
-\]
-
-\[
+\qquad
 \sem{\V{EPass}}{\sigma}{\V{VUnit}}{\sigma}
 \]
 
 Les littéraux ne modifient jamais l'environnement.
+\texttt{EPass} est un no-op syntaxique utilisé dans les branches vides.
 
 \subsection{\texttt{EIdent} et \texttt{EVar}}
 
-\textbf{Identifiant libre :}
+\textbf{Identifiant libre (\texttt{EIdent}) :}
 
 \[
 \irule{
@@ -309,9 +339,7 @@ s \in \dom{\sigma}
 }{
 \sem{\V{EIdent}\;s}{\sigma}{\sigma(s)}{\sigma}
 }
-\]
-
-\[
+\qquad
 \irule{
 s \notin \dom{\sigma}
 }{
@@ -322,17 +350,12 @@ s \notin \dom{\sigma}
 \begin{bloc}{Interprétation}
 Si l'identifiant n'existe pas dans $\sigma$,
 il devient automatiquement une chaîne de caractères.
-
-Cela permet :
-
-\begin{lstlisting}
-ls /tmp
-\end{lstlisting}
-
-sans guillemets.
+Cela permet d'écrire \texttt{ls /tmp} sans guillemets :
+\texttt{"ls"} et \texttt{"/tmp"} sont absents de $\sigma$
+et deviennent des \texttt{VString} passés à \texttt{execvp}.
 \end{bloc}
 
-\textbf{Variable stricte :}
+\textbf{Variable stricte (\texttt{EVar}, syntaxe \texttt{@x}) :}
 
 \[
 \irule{
@@ -340,15 +363,17 @@ s \in \dom{\sigma}
 }{
 \sem{\V{EVar}\;s}{\sigma}{\sigma(s)}{\sigma}
 }
-\]
-
-\[
+\qquad
 s \notin \dom{\sigma}
 \Rightarrow
 \texttt{Unbound variable}
 \]
 
+L'absence d'une variable \texttt{@x} est une erreur de programmation,
+contrairement à un identifiant libre.
+
 \subsection{\texttt{ESeq}}
+
 \[
 \irule{
 \sem{e_1}{\sigma}{v_1}{\sigma_1}
@@ -361,12 +386,13 @@ s \notin \dom{\sigma}
 }
 \]
 
-Implémentation :
+L'environnement est \textbf{propagé de gauche à droite} :
+une définition en position $i$ est visible aux positions $i+1 \ldots n$.
+Implémenté par \texttt{fold\_left} :
 
 \begin{lstlisting}[language=ml]
-let rec fold_left f acc = function
-  | []      -> acc
-  | x :: xs -> fold_left f (f acc x) xs
+let step (_, acc_env) e = eval e acc_env in
+fold_left step (VUnit, env) es
 \end{lstlisting}
 
 \subsection{\texttt{EDefVar} et \texttt{EAssign}}
@@ -383,9 +409,9 @@ let rec fold_left f acc = function
 \]
 
 \begin{bloc}{Observation}
-\texttt{EDefVar} et \texttt{EAssign}
+\texttt{EDefVar} (\texttt{define var x = e}) et \texttt{EAssign} (\texttt{x = e})
 utilisent exactement la même règle sémantique :
-la différence est uniquement syntaxique.
+la différence est \textbf{uniquement syntaxique}.
 \end{bloc}
 
 \subsection{\texttt{EDefFun}}
@@ -405,8 +431,10 @@ la différence est uniquement syntaxique.
 \]
 
 \begin{bloc}{Portée lexicale}
-La fermeture capture l'environnement
-au moment de la définition.
+La fermeture capture l'environnement $\sigma$
+\textbf{au moment de la définition}, pas au moment de l'appel.
+Si une variable est redéfinie après \texttt{define function},
+la fonction utilise toujours la valeur capturée.
 \end{bloc}
 
 \subsection{\texttt{EApp}}
@@ -424,21 +452,30 @@ au moment de la définition.
 \]
 
 \begin{lstlisting}[language=ml]
- Cshast.EApp (f, args) ->
-      (match lookup f env with
-       | VClosure (params, body, closure_env) ->
-           let eval_arg a      = fst (eval a env) in
-           let bind_param acc p v = bind p v acc in
-           let vals    = map eval_arg args in
-           let call_env =
-             try fold_left2 bind_param closure_env params vals
-             with Invalid_argument _ ->
-               failwith (f ^ ": wrong number of arguments")
-           in
-           let (v, _) = eval body call_env in
-           (v, env)                          (* caller's env is unchanged *)
-       | _ -> failwith (f ^ " is not a function"))
+| Cshast.EApp (f, args) ->
+    (match lookup f env with
+     | VClosure (params, body, closure_env) ->
+         let eval_arg a = fst (eval a env) in
+         let bind_param new_env param value = bind param value new_env in
+         let values   = map eval_arg args in
+         let call_env =
+           try fold_left2 bind_param closure_env params values
+           with Invalid_argument _ ->
+             failwith (f ^ ": wrong number of arguments")
+         in
+         let (v, _) = eval body call_env in
+         (v, env)    (* l'env de l'appelant est inchange *)
+     | _ -> failwith (f ^ " is not a function"))
 \end{lstlisting}
+
+\begin{bloc}{Points clés}
+\begin{itemize}
+  \item Les arguments sont évalués dans l'env de \textbf{l'appelant}.
+  \item Le corps s'exécute dans $\sigma_f$ (env capturé) étendu des paramètres.
+  \item Les modifications du corps sont \textbf{locales} : $\sigma$ de l'appelant est retourné inchangé.
+  \item \texttt{fold\_left2} associe chaque paramètre à sa valeur ; si les listes diffèrent en taille, \texttt{Invalid\_argument} est levé.
+\end{itemize}
+\end{bloc}
 
 \subsection{\texttt{EBinop}}
 
@@ -465,61 +502,288 @@ op(v_1,v_2)
 \hline
 Opérateur & Types & Résultat \\
 \hline
-\texttt{+} & int $\times$ int & somme \\
-\texttt{+} & str $\times$ str & concaténation \\
+\texttt{+} & int $\times$ int & somme entière \\
+\texttt{+} & str $\times$ str/int & concaténation \\
 \texttt{-}, \texttt{*} & int $\times$ int & entier \\
 \texttt{\#} & int $\times$ int & division entière \\
-\texttt{=} & tout type & booléen \\
+\texttt{=} & tout type & booléen structural \\
+\texttt{> < >= <=} & int ou str & booléen \\
 \hline
 \end{tabular}
 \end{center}
 
+\begin{bloc}{Pourquoi \texttt{\#} pour la division ?}
+Le caractère \texttt{/} est réservé par le lexeur aux chemins de
+fichiers (token \texttt{PATH}). La division entière utilise donc
+\texttt{\#} : \texttt{10 \# 3} $\to$ \texttt{VInt 3}.
+\end{bloc}
 
-\section{Commandes Unix}
+\subsection{\texttt{EIf} et \texttt{EAnd}}
 
-\subsection{\texttt{eval\_cmd}}
+\textbf{\texttt{EIf} :}
+\[
+\irule{
+\sem{cond}{\sigma}{v}{\sigma'} \;\; \truthy(v) \;\;
+\sem{t}{\sigma'}{v_t}{\sigma_t}
+}{
+\sem{\V{EIf}(cond,t,f)}{\sigma}{v_t}{\sigma_t}
+}
+\quad
+\irule{
+\sem{cond}{\sigma}{v}{\sigma'} \;\; \neg\truthy(v) \;\;
+\sem{f}{\sigma'}{v_f}{\sigma_f}
+}{
+\sem{\V{EIf}(cond,t,f)}{\sigma}{v_f}{\sigma_f}
+}
+\]
+
+\textbf{\texttt{EAnd} (court-circuit) :}
+\[
+\irule{
+\sem{e_1}{\sigma}{v_1}{\sigma_1} \;\; \truthy(v_1) \;\;
+\sem{e_2}{\sigma_1}{v_2}{\sigma_2}
+}{
+\sem{\V{EAnd}(e_1,e_2)}{\sigma}{v_2}{\sigma_2}
+}
+\quad
+\irule{
+\sem{e_1}{\sigma}{v_1}{\sigma_1} \;\; \neg\truthy(v_1)
+}{
+\sem{\V{EAnd}(e_1,e_2)}{\sigma}{\V{VBool\ false}}{\sigma_1}
+}
+\]
+
+Fonction \texttt{is\_truth} :
+$\V{VBool}\;b \to b$,\;
+$\V{VInt}\;n \to n\neq 0$,\;
+$\V{VString}\;s \to s\neq\texttt{""}$,\;
+$\V{VUnit} \to \texttt{false}$.
+
+\subsection{\texttt{EWhile}}
+
+\[
+\irule{
+\sem{cond}{\sigma}{v}{\sigma'} \quad \neg\truthy(v)
+}{
+\sem{\V{EWhile}(cond,body)}{\sigma}{\V{VUnit}}{\sigma'}
+}
+\;\textsc{[Stop]}
+\qquad
+\irule{
+\sem{cond}{\sigma}{v}{\sigma'} \quad \truthy(v)
+\quad \sem{body}{\sigma'}{\_}{\sigma''}
+\quad \sem{\V{EWhile}(\ldots)}{\sigma''}{u}{\sigma'''}
+}{
+\sem{\V{EWhile}(cond,body)}{\sigma}{u}{\sigma'''}
+}
+\;\textsc{[Iter]}
+\]
+
+Une référence mutable \texttt{env\_ref} transporte $\sigma$ entre les
+itérations, de sorte qu'une affectation dans le corps (ex.\ \texttt{i = @i + 1})
+soit visible lors de la prochaine évaluation de la condition.
+
+\subsection{\texttt{EFor}}
+
+\[
+\irule{
+\sem{e_i}{\sigma}{v_i}{\_}
+\qquad
+\sem{body}{\ext{\sigma}{x}{v_i}}{\_}{\sigma_i}
+}{
+\text{itération sur } e_i : \sigma \leftarrow \sigma_i
+}
+\]
+
+À chaque itération, la variable de boucle $x$ est liée à la valeur
+courante dans une extension de \texttt{env\_ref}.
+Le corps est réévalué pour chaque élément de la liste.
+
+% ============================================================
+\section{Fonctions utilitaires}
+% ============================================================
+
+\subsection{Réimplémentation sans le module \texttt{List}}
+
+Par choix pédagogique, \texttt{cshinterp.ml} n'importe aucun module
+de la bibliothèque standard OCaml (\texttt{List}, \texttt{Array},
+\textit{etc.}). Les fonctions suivantes sont réécrites à la main :
+
+\begin{center}
+\begin{longtable}{|l|l|p{4.5cm}|l|}
+\hline
+\textbf{Fonction} & \textbf{Équivalent stdlib} & \textbf{Rôle} & \textbf{Utilisée dans} \\
+\hline
+\texttt{assoc} & \texttt{List.assoc} & Recherche par clé, lève \texttt{Not\_found} & \texttt{lookup} \\
+\hline
+\texttt{assoc\_opt} & \texttt{List.assoc\_opt} & Recherche par clé, retourne \texttt{option} & \texttt{EIdent} \\
+\hline
+\texttt{map} & \texttt{List.map} & Applique $f$ à chaque élément & \texttt{EApp}, \texttt{eval\_cmd} \\
+\hline
+\texttt{fold\_left} & \texttt{List.fold\_left} & Réduction séquentielle gauche$\to$droite & \texttt{ESeq} \\
+\hline
+\texttt{fold\_left2} & \texttt{List.fold\_left2} & Réduction parallèle sur deux listes & \texttt{EApp} \\
+\hline
+\texttt{iter} & \texttt{List.iter} & Parcours avec effets de bord & \texttt{EFor} \\
+\hline
+\texttt{to\_array} & \texttt{Array.of\_list} & Conversion liste $\to$ tableau & \texttt{eval\_cmd} \\
+\hline
+\end{longtable}
+\end{center}
+
+\subsection{\texttt{assoc} et \texttt{assoc\_opt} --- recherche dans l'environnement}
+
+La recherche est linéaire et retourne la \textbf{première} (donc la plus récente)
+liaison trouvée. C'est ce qui implémente le masquage (\textit{shadowing}).
 
 \begin{lstlisting}[language=ml]
-eval_cmd args env =
-  let arg_to_str a  = value_to_string (fst (eval a env)) in
-  let strs = map arg_to_str args in
-  match strs with
-  | [] -> failwith "empty command"
+let rec assoc key = function
+  | []                        -> raise Not_found
+  | (k, v) :: _ when k = key -> v
+  | _ :: rest                 -> assoc key rest
 \end{lstlisting}
 
-\subsection{Builtins}
+\texttt{assoc\_opt} retourne \texttt{None} au lieu de lever une exception.
+Elle est utilisée par \texttt{EIdent} pour le repli sur \texttt{VString} :
+si un nom n'est pas lié dans $\sigma$, il est traité comme une chaîne littérale
+(utile pour les noms de commandes comme \texttt{ls}, \texttt{grep}, etc.).
+
+\subsection{\texttt{fold\_left} --- propagation de l'environnement}
+
+\begin{lstlisting}[language=ml]
+let rec fold_left f acc = function
+  | []      -> acc
+  | x :: xs -> fold_left f (f acc x) xs
+\end{lstlisting}
+
+Dans \texttt{ESeq}, l'accumulateur est la paire \texttt{(valeur, env)}.
+À chaque étape, la valeur précédente est ignorée (\texttt{\_}) et le
+nouvel environnement est transmis à l'expression suivante :
+
+\begin{lstlisting}[language=ml]
+let step (_, acc_env) e = eval e acc_env in
+fold_left step (VUnit, env) es
+\end{lstlisting}
+
+\subsection{\texttt{fold\_left2} --- liaison des paramètres}
+
+\begin{lstlisting}[language=ml]
+let rec fold_left2 f acc l1 l2 =
+  match l1, l2 with
+  | [],      []       -> acc
+  | x :: xs, y :: ys -> fold_left2 f (f acc x y) xs ys
+  | _                 -> raise (Invalid_argument "fold_left2")
+\end{lstlisting}
+
+Dans \texttt{EApp}, elle lie chaque paramètre à sa valeur dans
+\texttt{closure\_env} :
+
+\begin{lstlisting}[language=ml]
+let bind_param new_env param value = bind param value new_env in
+fold_left2 bind_param closure_env params values
+\end{lstlisting}
+
+Si les deux listes ne sont pas de même longueur,
+\texttt{Invalid\_argument} est capturée et convertie en
+\texttt{"wrong number of arguments"}.
+
+\subsection{\texttt{to\_array} --- conversion pour \texttt{execvp}}
+
+\texttt{Unix.execvp} attend un \texttt{string array}, mais les arguments
+sont construits comme une liste. \texttt{to\_array} effectue la conversion
+sans \texttt{Array.of\_list} :
+
+\begin{lstlisting}[language=ml]
+let to_array lst = match lst with
+  | [] -> [||]
+  | hd :: _ ->
+      let rec len acc = function
+        | []     -> acc
+        | _ :: t -> len (acc+1) t in
+      let arr = Array.make (len 0 lst) hd in
+      let rec fill i = function
+        | []      -> ()
+        | x :: xs -> arr.(i) <- x ; fill (i+1) xs
+      in fill 0 lst ; arr
+\end{lstlisting}
+
+% ============================================================
+\section{Commandes Unix}
+% ============================================================
+
+\subsection{Vue générale de \texttt{eval\_cmd}}
+
+Inspirée de \texttt{exec\_command} dans \texttt{foo.ml},
+\texttt{eval\_cmd} suit trois étapes :
+
+\begin{enumerate}
+  \item \textbf{Évaluation des arguments} : chaque expression est évaluée
+        puis convertie en chaîne via \texttt{value\_to\_string}.
+  \item \textbf{Filtrage des commandes internes} (\textit{builtins}) :
+        \texttt{cd} et \texttt{exit} sont traitées directement dans le processus shell.
+  \item \textbf{Exécution externe} : toute autre commande est lancée via \texttt{fork + execvp}.
+\end{enumerate}
+
+\begin{lstlisting}[language=ml]
+let arg_to_str a = value_to_string (fst (eval a env)) in
+let strs = map arg_to_str args in
+\end{lstlisting}
+
+\subsection{Commandes internes (\textit{builtins})}
 
 \begin{longtable}{|p{3cm}|p{9cm}|}
 \hline
-\textbf{Commande} & \textbf{Raison} \\
+\textbf{Commande} & \textbf{Raison d'être interne} \\
 \hline
-\texttt{cd} & doit modifier le shell courant \\
+\texttt{cd} & \texttt{Unix.chdir} dans un processus fils ne change
+              que le répertoire de ce fils, pas celui du shell courant.
+              La commande doit donc s'exécuter dans le processus shell lui-même. \\
 \hline
-\texttt{exit} & termine l'interpréteur \\
+\texttt{exit} & Doit terminer l'interpréteur lui-même.
+                Un \texttt{exit} dans un fils ne terminerait que le fils. \\
 \hline
 \end{longtable}
 
+\subsection{Exécution externe : \texttt{fork + execvp}}
 
-\subsection{fork + execvp}
+Structure directement inspirée de \texttt{exec\_command} dans \texttt{foo.ml} :
 
 \begin{lstlisting}[language=ml]
 match Unix.fork () with
 | 0 ->
-    Unix.execvp cmd argv
-| pid ->
-    Unix.waitpid [] pid
+    (* Fils : remplace son image par la commande a executer.
+       Le premier argument de argv[] est le nom de la commande. *)
+    Unix.execvp cmd (to_array (cmd :: rest))
+| child_pid ->
+    (* Pere : attend explicitement la fin de ce fils. *)
+    match Unix.waitpid [Unix.WUNTRACED] child_pid with
+    | (_, Unix.WEXITED 0)           -> (VBool true,  env)
+    | (_, Unix.WEXITED _)           -> (VBool false, env)
+    | (dead_pid, Unix.WSIGNALED s)  ->
+        Printf.eprintf "process %d interrupted by signal %d\n" dead_pid s;
+        (VBool false, env)
+    | (aslept_pid, Unix.WSTOPPED s) ->
+        Printf.eprintf "process %d stopped by signal %d\n" aslept_pid s;
+        (VBool false, env)
 \end{lstlisting}
 
-\begin{bloc}{Convention Unix}
-Code retour $0$
-$\Rightarrow$
-succès
-$\Rightarrow$
-\texttt{VBool true}
+\begin{bloc}{Code retour et \texttt{VBool}}
+Un code retour $0$ correspond à \texttt{VBool true} ;
+tout autre code correspond à \texttt{VBool false}.
+Ce comportement est \textbf{intentionnel} : des commandes comme \texttt{test}
+retournent $1$ pour signifier « faux » --- ce n'est pas une erreur.
+Le flag \texttt{Unix.WUNTRACED} (repris de \texttt{foo.ml}) permet de
+détecter également les processus arrêtés (\texttt{Ctrl+Z}).
 \end{bloc}
 
-
+% ============================================================
 \section{Pipes Unix}
+% ============================================================
+
+\subsection{Principe}
+
+Inspirée de \texttt{pipe\_commands} dans \texttt{foo.ml},
+\texttt{eval\_pipe} relie deux expressions par un tube Unix :
 
 \[
 \irule{
@@ -531,42 +795,73 @@ $\Rightarrow$
 }
 \]
 
+\subsection{Protocole}
+
+\begin{enumerate}
+  \item \texttt{Unix.pipe()} crée la paire \texttt{(fd\_in, fd\_out)}.
+  \item \texttt{stdin} est sauvegardé avec \texttt{Unix.dup(stdin)}.
+  \item \textbf{Fils gauche} : redirige \texttt{stdout} vers \texttt{fd\_out},
+        évalue $e_1$, puis quitte (\texttt{exit 0}).
+  \item \textbf{Père} : redirige \texttt{stdin} depuis \texttt{fd\_in},
+        évalue $e_2$.
+  \item Le père attend la fin du fils (\texttt{waitpid}),
+        puis restaure \texttt{stdin} original.
+\end{enumerate}
+
 \begin{lstlisting}[language=ml]
-let (fd_in, fd_out) =
-  Unix.pipe ()
+let (fd_in, fd_out) = Unix.pipe () in
+let saved_stdin = Unix.dup Unix.stdin in
+match Unix.fork () with
+| 0 ->
+    (* Fils gauche : ecrit dans le pipe *)
+    Unix.dup2 fd_out Unix.stdout;
+    Unix.close fd_out; Unix.close fd_in; Unix.close saved_stdin;
+    ignore (eval e1 env); exit 0
+| left_pid ->
+    (* Pere : lit depuis le pipe *)
+    Unix.dup2 fd_in Unix.stdin;
+    Unix.close fd_out; Unix.close fd_in;
+    let result = eval e2 env in
+    ignore (Unix.waitpid [Unix.WUNTRACED] left_pid);
+    Unix.dup2 saved_stdin Unix.stdin;
+    Unix.close saved_stdin;
+    result
 \end{lstlisting}
 
-\begin{bloc}{Principe}
-\begin{itemize}
-  \item le processus gauche écrit dans \texttt{fd\_out}
-  \item le processus droit lit depuis \texttt{fd\_in}
-  \item \texttt{stdin} est restauré après le pipe
-\end{itemize}
+\begin{bloc}{Différence avec \texttt{foo.ml}}
+Dans \texttt{foo.ml}, le pipe est définitif : le processus père
+n'a plus besoin de lire depuis le clavier après le pipe.
+Dans CaioSHell, le père est le REPL lui-même.
+Après l'exécution du pipe, il doit continuer à lire les commandes
+de l'utilisateur.
+\texttt{Unix.dup(stdin)} sauvegarde le descripteur original,
+et \texttt{Unix.dup2(saved\_stdin, stdin)} le restaure
+une fois le pipe terminé.
 \end{bloc}
 
-
+% ============================================================
 \section{Résumé}
+% ============================================================
 
 \begin{center}
 \begin{tabular}{|l|c|c|}
 \hline
-Construction & Étend $\sigma$ & Visible appelant \\
+Construction & Étend $\sigma$ & Visible à l'appelant \\
 \hline
-\texttt{EDefVar} & oui & oui \\
-\texttt{EAssign} & oui & oui \\
+\texttt{EDefVar}, \texttt{EAssign} & oui & oui \\
 \texttt{EDefFun} & oui & oui \\
-\texttt{EApp} & local & non \\
+\texttt{EApp} (corps) & local & non \\
 \texttt{ESeq} & propagation & oui \\
-\texttt{EWhile} & propagation & oui \\
-\texttt{EFor} & propagation & oui \\
-\texttt{ECmd} & non & non \\
-\texttt{EPipe} & non & non \\
+\texttt{EWhile}, \texttt{EFor} & propagation & oui \\
+\texttt{EIf}, \texttt{EAnd} & branche exécutée & oui \\
+\texttt{ECmd}, \texttt{EPipe} & non & non \\
+littéraux, \texttt{EPass} & non & non \\
 \hline
 \end{tabular}
 \end{center}
 
 \begin{bloc}{Conclusion}
-Le modèle :
+Le modèle sémantique :
 
 \[
 \sem{e}{\sigma}{v}{\sigma'}
@@ -575,29 +870,24 @@ Le modèle :
 reflète directement la signature OCaml :
 
 \begin{lstlisting}[language=ml]
-eval :
-  expr -> env -> value * env
+eval : expr -> env -> value * env
 \end{lstlisting}
 
 Le projet combine :
 
 \begin{itemize}
-  \item interprétation dynamique,
-  \item portée lexicale,
-  \item appels système Unix,
-  \item pipes et processus,
-  \item propagation fonctionnelle de l'environnement.
+  \item interprétation dynamique sans phase de typage,
+  \item portée lexicale via les fermetures (\texttt{VClosure}),
+  \item appels système Unix (\texttt{fork}, \texttt{execvp}, \texttt{pipe}),
+  \item propagation fonctionnelle de l'environnement,
+  \item fonctions utilitaires réimplémentées sans le module \texttt{List}.
 \end{itemize}
 \end{bloc}
 
-\begin{bloc}{Example}
+\begin{bloc}{Exemple de code testé}
 
-L'example de code utilisé pour tester :
-
-\begin{lstlisting}[language=ml]
-    
+\begin{lstlisting}
 #>> CaioSHell - Tests
-
 
 #>> Simple commands
 echo " 1. Simple commands ";;
@@ -640,7 +930,7 @@ greet("Alice");;
 greet("Bob");;
 
 #>> Function with arithmetic
-echo " 6. Function with arithmetic ";;
+echo " Function with arithmetic ";;
 define function double(x) {
     define var result = @x * 2;
     echo @result;
@@ -657,7 +947,7 @@ ls / | grep tmp;;
 echo " And (&&) ";;
 (echo "first") && (echo "second");;
 
-#>>If / else
+#>> If / else
 echo "If / else ";;
 if (test 1 "-eq" 1) {
     echo "condition true";
@@ -676,12 +966,12 @@ for (@item in ["alpha", "beta", "gamma"]) {
     echo @item;
 };;
 
-#>> While loop
+#>> While loop (avec entiers negatifs)
 echo " While loop ";;
 define var i = 0;;
-while (test @i "-lt" 3) {
+while (test @i "-gt" -3) {
     echo @i;
-    i = @i + 1;
+    i = @i - 1;
 };;
 
 #>> Variable reassignment
@@ -699,7 +989,7 @@ if (test 0 "-eq" 1) {
 };;
 echo "pass ok";;
 
-#>>Files with dots in name
+#>> Files with dots in name
 echo "File paths with dots ";;
 cat /etc/hostname;;
 
@@ -715,7 +1005,6 @@ cd /;;
 pwd;;
 
 echo " All tests done ";;
-
 \end{lstlisting}
 
 \end{bloc}
